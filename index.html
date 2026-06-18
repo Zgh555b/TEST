@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>成都全域通 · 地铁+公交混合智慧出行</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin:0; padding:0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f0f4f8;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .header {
+            background: #0b2b26;
+            color: white;
+            padding: 10px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            z-index: 10;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .title h1 { font-size: 1.4rem; font-weight: 600; }
+        .title p { font-size: 0.7rem; opacity: 0.8; }
+        .badge { background: #2e7d64; padding: 5px 12px; border-radius: 30px; font-size: 0.7rem; }
+        .main-container { display: flex; flex: 1; overflow: hidden; }
+        .map-section { flex: 3; position: relative; background: #d9e0e8; }
+        #map { height: 100%; width: 100%; }
+        .control-panel {
+            flex: 1.2; background: rgba(255,255,255,0.96);
+            border-left: 1px solid #cddfe7; display: flex; flex-direction: column;
+            overflow-y: auto; box-shadow: -2px 0 12px rgba(0,0,0,0.05);
+        }
+        .panel-inner { padding: 20px 18px; }
+        .input-group { margin-bottom: 20px; position: relative; }
+        .input-group label { font-weight: 700; font-size: 0.85rem; color: #1e3a5f; margin-bottom: 8px; display: block; }
+        .search-input {
+            width: 100%; padding: 12px 14px; border: 1.5px solid #cbdbe2; border-radius: 20px;
+            background: white; font-family: inherit; font-size: 0.9rem;
+            outline: none;
+        }
+        .search-input:focus { border-color: #2e7d64; box-shadow: 0 0 0 2px rgba(46,125,100,0.2); }
+        .suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 16px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .suggestions div {
+            padding: 8px 14px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .suggestions div:hover { background: #eef2f5; }
+        .search-btn {
+            background: #1a5d4c; color: white; width: 100%; padding: 14px;
+            border: none; border-radius: 40px; font-weight: 800; font-size: 1rem;
+            cursor: pointer; margin: 12px 0 20px;
+        }
+        .search-btn:hover { background: #0e4238; }
+        .result-card {
+            background: #f0f6fa; border-radius: 28px; padding: 18px;
+            border-left: 5px solid #2e7d64; margin-top: 10px;
+            max-height: 350px;
+            overflow-y: auto;
+        }
+        .time-total { font-weight: 800; color: #1a5d4c; font-size: 1.2rem; margin: 8px 0; }
+        .route-step {
+            background: white; border-radius: 18px; padding: 8px 12px; margin: 8px 0;
+            border-left: 4px solid #fabd2f; font-size: 0.85rem;
+        }
+        .legend { margin-top: 20px; font-size: 0.7rem; background: #eef2f5; border-radius: 20px; padding: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+        .legend span { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 4px; }
+        @media (max-width: 800px) {
+            .main-container { flex-direction: column; }
+            .control-panel { flex: 1; max-height: 45%; border-left: none; border-top: 1px solid #ccc; }
+        }
+    </style>
+</head>
+<body>
+<div class="header">
+    <div class="title"><h1>🚇🚌 成都全域通 · 智慧出行</h1><p>地铁+公交混合换乘 | 完整公交线路 | 公交换乘+步行时间</p></div>
+    <div class="badge">⏱️ 地铁:39.8km/h+0.7min/站 | 公交:20km/h+1min/站 | 换乘+步行4min</div>
+</div>
+<div class="main-container">
+    <div class="map-section"><div id="map"></div></div>
+    <div class="control-panel">
+        <div class="panel-inner">
+            <div class="input-group">
+                <label>📍 起点 (支持地铁/公交)</label>
+                <input type="text" id="startInput" class="search-input" placeholder="输入站名搜索" autocomplete="off">
+                <div id="startSuggestions" class="suggestions"></div>
+            </div>
+            <div class="input-group">
+                <label>🏁 终点 (支持地铁/公交)</label>
+                <input type="text" id="endInput" class="search-input" placeholder="输入站名搜索" autocomplete="off">
+                <div id="endSuggestions" class="suggestions"></div>
+            </div>
+            <button class="search-btn" id="routeBtn">✨ 最短时间路线 (地铁+公交混合) ✨</button>
+            <div id="resultArea" class="result-card">
+                <div class="result-title">🗺️ 最优路径（混合换乘）</div>
+                <div id="routeContent" style="min-height: 120px;">💡 选择起点/终点，系统将计算地铁+公交混合最短时间路径</div>
+            </div>
+            <div class="legend">
+                <div><span style="background:#0033a0;"></span>1</div><div><span style="background:#f7941e;"></span>2</div><div><span style="background:#e6007e;"></span>3</div><div><span style="background:#006633;"></span>4</div>
+                <div><span style="background:#9b59b6;"></span>5</div><div><span style="background:#8B4513;"></span>6</div><div><span style="background:#7ec8e0;"></span>7</div><div><span style="background:#88b04b;"></span>8</div>
+                <div><span style="background:#f7d117;"></span>9</div><div><span style="background:#00aad2;"></span>10</div><div><span style="background:#ff8c00;"></span>13</div><div><span style="background:#808080;"></span>17</div>
+                <div><span style="background:#a0a0a0;"></span>18</div><div><span style="background:#dda0dd;"></span>19</div><div><span style="background:#20b2aa;"></span>27</div><div><span style="background:#cd5c5c;"></span>30</div>
+                <div><span style="background:#1f8a4c;"></span>⭐起终点</div>
+                <div><span style="background:#e9a23b;"></span>🚏公交站点</div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="data.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
